@@ -1186,6 +1186,7 @@ function Home({
           how you like to work.
         </p>
         <button className="td-btn-secondary" onClick={onStartCareer} style={{ marginTop: 0 }}>Take the career quiz</button>
+        <p className="td-helper-text" style={{ textAlign: "center", marginTop: "8px" }}>16 questions, about 4 minutes</p>
         {hasLastCareer && (
           <button className="td-link-btn" style={{ display: "block", margin: "10px auto 0" }} onClick={onContinueCareer}>
             Continue to your last results
