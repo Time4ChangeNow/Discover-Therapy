@@ -1854,14 +1854,11 @@ function ChecklistExercise({ steps, closingNote, trackId }) {
   );
 }
 
-const GUIDED_MEDITATION_SOUNDCLOUD_URL = "https://soundcloud.com/catia-lyst/15-min-hypnosis-activation-of-neurotransmitters";
+const GUIDED_MEDITATION_EMBED_SRC =
+  "https://w.soundcloud.com/player/?url=https%3A//api.soundcloud.com/tracks/soundcloud%253Atracks%253A1565912542" +
+  "&color=%23bc7355&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false";
 
 function GuidedMeditationEmbed() {
-  const embedSrc =
-    "https://w.soundcloud.com/player/?url=" +
-    encodeURIComponent(GUIDED_MEDITATION_SOUNDCLOUD_URL) +
-    "&color=%23bc7355&auto_play=false&hide_related=true&show_comments=false&show_user=true&show_reposts=false&show_teaser=false&visual=false";
-
   return (
     <div className="td-detail-section">
       <h3 className="td-section-heading">A free guided hypnosis session</h3>
@@ -1870,7 +1867,7 @@ function GuidedMeditationEmbed() {
       </p>
       <div className="td-audio-frame">
         <iframe
-          src={embedSrc}
+          src={GUIDED_MEDITATION_EMBED_SRC}
           allow="autoplay"
           title="15-minute guided hypnosis session (audio)"
         />
