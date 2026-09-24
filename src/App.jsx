@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 /* ---------------------------------------------------------
    PHOTOS
@@ -59,7 +59,7 @@ function loadPostHog() {
     (function (t, e) {
       var o, n, p, r;
       e.__SV || ((window.posthog = e), (e._i = []), (e.init = function (i, s, a) {
-        function g(t, e) { var o = e.split("."); (o = 2 === o.length ? t[o[0]][o[1]] : t[o[0]]), o && o.apply ? o.apply(t, Array.prototype.slice.call(arguments, 2)) : void 0; }
+        function g(t, e) { var o = e.split("."); 2 == o.length && ((t = t[o[0]]), (e = o[1])), (t[e] = function () { t.push([e].concat(Array.prototype.slice.call(arguments, 0))); }); }
         ((p = t.createElement("script")).type = "text/javascript"), (p.crossOrigin = "anonymous"), (p.async = !0),
           (p.src = s.api_host.replace(".i.posthog.com", "-assets.i.posthog.com") + "/static/array.js");
         var u = t.getElementsByTagName("script")[0];
@@ -980,10 +980,76 @@ function LockedResultCard({ worldId }) {
   );
 }
 
+/* One card that stands in for all locked results, instead of repeating
+   "Hidden until unlocked" for every match. Shows which styles the hidden
+   matches come from (not their names) and a single clear unlock button. */
+function LockedMatchesSummary({ worldIds, count, hasOutside, quiz }) {
+  useEffect(() => {
+    track("premium_teaser_viewed", { quiz, hidden_count: count });
+  }, [quiz, count]);
+
+  const uniqueWorlds = [...new Set(worldIds.filter(Boolean))];
+  const noun = quiz === "career" ? "career" : "approach";
+  const plural = count === 1 ? noun : noun === "approach" ? "approaches" : "careers";
+
+  return (
+    <div className="td-rec-card td-locked-summary">
+      <p className="td-locked-summary-heading">
+        {count} more {plural} matched your answers
+      </p>
+      {uniqueWorlds.length > 0 && (
+        <div className="td-locked-summary-chips">
+          {uniqueWorlds.map((w) => (
+            <span key={w} className="td-chip" style={{ background: WORLD_META[w].color }}>
+              {WORLD_META[w].name}
+            </span>
+          ))}
+        </div>
+      )}
+      {hasOutside && (
+        <p className="td-detail-text" style={{ margin: "12px 0 0" }}>
+          Including one from a style quite different from your top match.
+        </p>
+      )}
+      <p className="td-detail-text" style={{ margin: "12px 0 0" }}>
+        {quiz === "career"
+          ? "See every match, why it suits you and the training route for each. Plus a short guided exercise for each approach, so you know what the work actually feels like before you invest in training."
+          : "See every match and why it suits you. Plus a short guided exercise for each approach, so you get a feel for how it works before you spend time and money on sessions."}
+      </p>
+      <button
+        className="td-btn-primary"
+        style={{ marginTop: "16px" }}
+        onClick={() => {
+          track("premium_teaser_clicked", { quiz, hidden_count: count });
+          const el = document.getElementById("premium-unlock-anchor");
+          if (el) el.scrollIntoView({ behavior: "smooth" });
+        }}
+      >
+        See all my matches for $3, one time
+      </button>
+    </div>
+  );
+}
+
 function PremiumCard({ isPremium, onUnlock }) {
   const [showRedeem, setShowRedeem] = useState(false);
   const [codeInput, setCodeInput] = useState("");
   const [error, setError] = useState("");
+  const cardRef = useRef(null);
+
+  useEffect(() => {
+    if (isPremium || !cardRef.current || typeof IntersectionObserver === "undefined") return;
+    let sent = false;
+    const obs = new IntersectionObserver((entries) => {
+      if (!sent && entries.some((en) => en.isIntersecting)) {
+        sent = true;
+        track("premium_offer_viewed");
+        obs.disconnect();
+      }
+    }, { threshold: 0.5 });
+    obs.observe(cardRef.current);
+    return () => obs.disconnect();
+  }, [isPremium]);
 
   const handleRedeem = () => {
     if (codeInput.trim().toUpperCase() === PREMIUM_UNLOCK_CODE) {
@@ -1011,15 +1077,19 @@ function PremiumCard({ isPremium, onUnlock }) {
     );
   }
   return (
-    <div className="td-premium-card">
+    <div className="td-premium-card" ref={cardRef}>
       <p className="td-premium-label">Discover Therapy Premium</p>
-      <p className="td-premium-heading">Get the full picture — for $3</p>
-      <p className="td-premium-sub">
-        16 real guided exercises you can do yourself, independently, anytime — plus your
-        full career &amp; therapy-type analysis, and 10% off the Discover Therapy course.
-        Everything you need to find what actually works for you, without the time and
-        guesswork.
+      <p className="td-premium-heading">Try before you commit, for $3</p>
+      <p className="td-premium-sub" style={{ marginBottom: "10px" }}>
+        Therapy sessions and training take real time and money, and it can take a while
+        to find out an approach isn't right for you. Premium lets you get a feel for each
+        one first.
       </p>
+      <ul className="td-premium-list">
+        <li>16 short guided exercises, one for each approach, so you can experience how it works, in your own time</li>
+        <li>Your full analysis: every match and why it suits you, not just the top one</li>
+        <li>10% off the Discover Therapy course</li>
+      </ul>
       <a className="td-premium-btn" href={PREMIUM_PAYMENT_LINK} target="_blank" rel="noreferrer" onClick={() => track("external_link_clicked", { destination: "premium_checkout" })}>
         Buy for $3
       </a>
@@ -1045,6 +1115,9 @@ function PremiumCard({ isPremium, onUnlock }) {
           {error && <p className="td-premium-error">{error}</p>}
         </div>
       )}
+      <p className="td-premium-note">
+        The exercises are a taster, not a replacement for working with a qualified practitioner.
+      </p>
       <p className="td-premium-note">
         Buying opens a secure checkout in a new tab. Your confirmation page will
         show an unlock code — enter it above to unlock instantly.
@@ -1260,7 +1333,7 @@ function QuizScreen({ questions, sections, qIndex, answers, onSelect, onNext, on
   );
 }
 
-function DiscoverResultsScreen({ results, saved, onToggleSave, onRetake, onHome, onOpenDetail, isPremium }) {
+function DiscoverResultsScreen({ results, saved, onToggleSave, onRetake, onHome, onOpenDetail, isPremium, onUnlockPremium }) {
   const { worlds, recommendations, outsideMatch } = results;
   const [expandedQual, setExpandedQual] = useState({});
   const toggleQual = (id) => setExpandedQual((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -1342,8 +1415,7 @@ function DiscoverResultsScreen({ results, saved, onToggleSave, onRetake, onHome,
 
       <h3 className="td-section-heading">Approaches worth exploring</h3>
       <div className="td-rec-list">
-        {recommendations.map((m, i) => {
-          if (i > 0 && !isPremium) return <LockedResultCard worldId={m.worldId} key={m.id} />;
+        {(isPremium ? recommendations : recommendations.slice(0, 1)).map((m, i) => {
           return (
             <div className="td-rec-card" key={m.id}>
               <div className="td-item-header">
@@ -1373,9 +1445,17 @@ function DiscoverResultsScreen({ results, saved, onToggleSave, onRetake, onHome,
             </div>
           );
         })}
+        {!isPremium && (
+          <LockedMatchesSummary
+            quiz="discover"
+            worldIds={[...recommendations.slice(1).map((m) => m.worldId), outsideMatch && outsideMatch.worldId]}
+            count={recommendations.slice(1).length + (outsideMatch ? 1 : 0)}
+            hasOutside={!!outsideMatch}
+          />
+        )}
       </div>
 
-      {isPremium ? (
+      {isPremium && (
         <div className="td-outside-card">
           <p className="td-outside-label">Explore outside your match</p>
           <div className="td-item-header" style={{ marginBottom: "6px" }}>
@@ -1400,9 +1480,11 @@ function DiscoverResultsScreen({ results, saved, onToggleSave, onRetake, onHome,
           </div>
           {expandedQual[outsideMatch.id] && <QualPanel modalityId={outsideMatch.id} />}
         </div>
-      ) : (
-        <LockedResultCard worldId={outsideMatch.worldId} />
       )}
+
+      <div id="premium-unlock-anchor">
+        <PremiumCard isPremium={isPremium} onUnlock={onUnlockPremium} />
+      </div>
 
       <button className="td-btn-secondary" onClick={onRetake}>Retake the quiz</button>
 
@@ -1418,7 +1500,7 @@ function DiscoverResultsScreen({ results, saved, onToggleSave, onRetake, onHome,
   );
 }
 
-function CareerResultsScreen({ results, saved, onToggleSave, onRetake, onHome, onOpenDetail, isPremium }) {
+function CareerResultsScreen({ results, saved, onToggleSave, onRetake, onHome, onOpenDetail, isPremium, onUnlockPremium }) {
   const { ranked } = results;
   const [expandedQual, setExpandedQual] = useState({});
   const toggleQual = (id) => setExpandedQual((prev) => ({ ...prev, [id]: !prev[id] }));
@@ -1437,8 +1519,7 @@ function CareerResultsScreen({ results, saved, onToggleSave, onRetake, onHome, o
       </div>
 
       <div className="td-rec-list">
-        {ranked.map((c, i) => {
-          if (i > 0 && !isPremium) return <LockedResultCard worldId={CAREER_WORLD_MAP[c.id]} key={c.id} />;
+        {(isPremium ? ranked : ranked.slice(0, 1)).map((c, i) => {
           return (
             <div className="td-rec-card" key={c.id}>
               <div className="td-item-header">
@@ -1466,6 +1547,18 @@ function CareerResultsScreen({ results, saved, onToggleSave, onRetake, onHome, o
             </div>
           );
         })}
+        {!isPremium && ranked.length > 1 && (
+          <LockedMatchesSummary
+            quiz="career"
+            worldIds={ranked.slice(1).map((c) => CAREER_WORLD_MAP[c.id])}
+            count={ranked.length - 1}
+            hasOutside={false}
+          />
+        )}
+      </div>
+
+      <div id="premium-unlock-anchor">
+        <PremiumCard isPremium={isPremium} onUnlock={onUnlockPremium} />
       </div>
 
       <button className="td-btn-secondary" onClick={onRetake}>Retake the career quiz</button>
@@ -2798,6 +2891,20 @@ export default function App() {
           color:var(--cream);
         }
 
+        .td-locked-summary{
+          background:var(--cream-deep);
+          border:1px dashed var(--line);
+        }
+        .td-locked-summary-heading{
+          font-family:'Fraunces', serif;
+          font-size:19px;
+          font-weight:500;
+          line-height:1.3;
+          margin:0 0 12px;
+          color:var(--charcoal);
+        }
+        .td-locked-summary-chips{ display:flex; flex-wrap:wrap; gap:6px; }
+
         .td-rec-card-locked{
           background:var(--cream-deep);
           border:1px dashed var(--line);
@@ -2920,6 +3027,9 @@ export default function App() {
         .td-premium-label{ font-size:11px; color:var(--gold); font-weight:600; margin:0 0 8px; }
         .td-premium-heading{ font-family:'Fraunces', serif; font-size:17px; font-weight:500; margin:0 0 6px; line-height:1.3; }
         .td-premium-sub{ font-size:13px; opacity:.85; margin:0 0 16px; line-height:1.5; }
+        .td-premium-list{ font-size:13px; line-height:1.5; margin:0 0 16px; padding-left:18px; }
+        .td-premium-list li{ margin-bottom:6px; }
+        .td-premium-list li::marker{ color:var(--gold); }
         .td-premium-btn{
           display:inline-block;
           background:var(--cream);
@@ -3019,6 +3129,7 @@ export default function App() {
             onHome={goHome}
             onOpenDetail={openDetail}
             isPremium={isPremium}
+            onUnlockPremium={unlockPremium}
           />
         )}
 
@@ -3045,6 +3156,7 @@ export default function App() {
             onHome={goHome}
             onOpenDetail={openDetail}
             isPremium={isPremium}
+            onUnlockPremium={unlockPremium}
           />
         )}
 
